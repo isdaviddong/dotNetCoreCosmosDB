@@ -1,5 +1,8 @@
 ﻿using System;
 using Microsoft.Azure.Cosmos;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace cosmosdb
 {
@@ -8,14 +11,16 @@ namespace cosmosdb
         //你的cosmos DB EndpointUri
         private static readonly string EndpointUri = "https://_______________.documents.azure.com:443/";
         //你的cosmos db PrimaryKey
-        private static readonly string PrimaryKey = "aFN7hUoxX2____________________DGOqWClUsA==";
+        private static readonly string PrimaryKey = "6YbWwz83UlU2Lb___________________syYAje8x28thmzzvHDMcsg==";
         private static CosmosClient cosmosClient;
         private static Database database;
         private static Container container;
         private static string databaseId = "CRM";
         private static string containerId = "Customers";
+        static readonly HttpClient client = new HttpClient();
+        static readonly string CompanyDataUrl = "https://data.taipei/api/v1/dataset/296acfa2-5d93-4706-ad58-e83cc951863c?scope=resourceAquire";
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             cosmosClient = new CosmosClient(EndpointUri, PrimaryKey, new CosmosClientOptions()
             { ApplicationName = "CosmosDBTest" });
@@ -36,21 +41,16 @@ namespace cosmosdb
             QueryData();
         }
 
-        private static void InsertNewData()
+        private static async Task InsertNewData()
         {
-            for (int i = 1; i <= 100; i++)
+            var customers = await GetCustomers();
+            var count = 1;
+            foreach (var cust in customers)
             {
-                var cust = new Customer()
-                {
-                    id = Guid.NewGuid().ToString(),
-                    Title = "錸客多巴有限公司",
-                    TEL = "02-12345678",
-                    Address = "台北市中正區忠孝一路四段３８號",
-                    NO = (new Random()).Next(11111111, 99999999).ToString()
-                };
-
+                cust.id = Guid.NewGuid().ToString();
+                cust.TEL = "02-12345678";
                 var item = container.CreateItemAsync<Customer>(cust, new PartitionKey(cust.Title)).Result;
-                Console.WriteLine("Created item {0}: \n{1}\n", i, Newtonsoft.Json.JsonConvert.SerializeObject(item));
+                Console.WriteLine($"Created item {count++}: \n{Newtonsoft.Json.JsonConvert.SerializeObject(item)}\n");
             }
             Console.WriteLine("\n100 items has been added...");
         }
@@ -83,6 +83,15 @@ namespace cosmosdb
             // Create a new container
             container = database.CreateContainerIfNotExistsAsync(containerId, "/Title").Result;
             Console.WriteLine(" Container Created: {0}\n", container.Id);
+        }
+
+        static async Task<Customer[]> GetCustomers()
+        {
+            var response = await client.GetAsync(CompanyDataUrl);
+            response.EnsureSuccessStatusCode();
+            var resultBody = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<Wrapper>(resultBody);
+            return result.Result.Results;
         }
     }
 }
